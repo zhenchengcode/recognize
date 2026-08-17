@@ -15,3 +15,5 @@ iPhone：
 1. 用 Safari 打开部署后的网址
 2. 点击分享
 3. 选择“添加到主屏幕”
+
+Deployment test: GitHub → Vercel auto-deploy verified on 2026-08-17.
