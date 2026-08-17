@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f5f2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="打钩记录" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.svg" />
+  <title>打钩记录</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      color: #171717;
+      background: #f5f5f2;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f5f2; min-height: 100vh; }
+    .app { width: min(720px, 100%); margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 18px max(40px, env(safe-area-inset-bottom)); }
+    h1 { font-size: 28px; line-height: 1.1; margin: 16px 0 18px; letter-spacing: -0.03em; }
+    .input-wrap { position: sticky; top: 0; padding: 8px 0 14px; background: linear-gradient(#f5f5f2 75%, rgba(245,245,242,0)); z-index: 10; }
+    input { width: 100%; height: 52px; border: 1px solid #d6d6d0; border-radius: 14px; background: white; padding: 0 16px; font-size: 17px; outline: none; }
+    input:focus { border-color: #8f8f88; box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
+    .hint { color: #777770; font-size: 13px; margin: 8px 2px 0; }
+    .empty { color: #8a8a84; text-align: center; padding: 64px 12px; font-size: 15px; }
+    .tag { background: white; border: 1px solid #deded8; border-radius: 18px; padding: 16px; margin: 12px 0; box-shadow: 0 1px 1px rgba(0,0,0,.02); }
+    .tag-top { display: flex; gap: 12px; align-items: center; }
+    .check { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 14px; border: 1px solid #cfcfc8; background: #fafaf8; font-size: 24px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .check:active { transform: scale(.96); }
+    .main { flex: 1; min-width: 0; }
+    .name { font-size: 18px; font-weight: 650; word-break: break-word; }
+    .count { margin-top: 3px; color: #6f6f69; font-size: 14px; }
+    .delete { border: 0; background: transparent; color: #a2a29c; font-size: 20px; cursor: pointer; padding: 8px; }
+    details { margin: 12px 0 0 56px; }
+    summary { cursor: pointer; color: #73736d; font-size: 14px; }
+    .history { margin-top: 8px; padding-left: 0; list-style: none; max-height: 220px; overflow: auto; }
+    .history li { border-top: 1px solid #efefeb; padding: 8px 0; color: #555550; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>打钩记录</h1>
+    <div class="input-wrap">
+      <input id="newTag" type="text" autocomplete="off" placeholder="输入文字，按回车生成标签" />
+      <div class="hint">每次点 ✓ 都会增加一次，并记录时间。</div>
+    </div>
+    <section id="tags"></section>
+  </main>
+  <script>
+    const STORAGE_KEY = "checktag-pwa-v1";
+    const input = document.getElementById("newTag");
+    const tagsEl = document.getElementById("tags");
+    let tags = load();
+    function load() { try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; } }
+    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tags)); }
+    function formatTime(iso) { const d = new Date(iso); return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(d); }
+    function addTag(name) { const text = name.trim(); if (!text) return; tags.unshift({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name: text, checks: [] }); save(); render(); }
+    function checkTag(id) { const tag = tags.find(t => t.id === id); if (!tag) return; tag.checks.unshift(new Date().toISOString()); save(); render(); }
+    function deleteTag(id) { const tag = tags.find(t => t.id === id); if (!tag) return; if (!confirm(`删除“${tag.name}”以及它的全部记录？`)) return; tags = tags.filter(t => t.id !== id); save(); render(); }
+    function render() {
+      tagsEl.innerHTML = "";
+      if (!tags.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "还没有标签"; tagsEl.appendChild(empty); return; }
+      for (const tag of tags) {
+        const card = document.createElement("article"); card.className = "tag";
+        const top = document.createElement("div"); top.className = "tag-top";
+        const check = document.createElement("button"); check.className = "check"; check.type = "button"; check.textContent = "✓"; check.setAttribute("aria-label", `给 ${tag.name} 打钩`); check.addEventListener("click", () => checkTag(tag.id));
+        const main = document.createElement("div"); main.className = "main";
+        const name = document.createElement("div"); name.className = "name"; name.textContent = tag.name;
+        const count = document.createElement("div"); count.className = "count"; const latest = tag.checks[0]; count.textContent = latest ? `已打钩 ${tag.checks.length} 次 · 最近 ${formatTime(latest)}` : "还没有打钩";
+        main.append(name, count);
+        const del = document.createElement("button"); del.className = "delete"; del.type = "button"; del.textContent = "×"; del.setAttribute("aria-label", `删除 ${tag.name}`); del.addEventListener("click", () => deleteTag(tag.id));
+        top.append(check, main, del); card.appendChild(top);
+        if (tag.checks.length) {
+          const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = `查看 ${tag.checks.length} 条记录`; details.appendChild(summary);
+          const history = document.createElement("ul"); history.className = "history";
+          tag.checks.forEach((time, i) => { const li = document.createElement("li"); li.textContent = `#${tag.checks.length - i} · ${formatTime(time)}`; history.appendChild(li); });
+          details.appendChild(history); card.appendChild(details);
+        }
+        tagsEl.appendChild(card);
+      }
+    }
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTag(input.value); input.value = ""; } });
+    if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js"); }); }
+    render();
+  </script>
+</body>
+</html>
