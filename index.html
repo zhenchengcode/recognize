@@ -11,11 +11,7 @@
   <link rel="apple-touch-icon" href="icon-192.svg" />
   <title>打钩记录</title>
   <style>
-    :root {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-      color: #171717;
-      background: #f5f5f2;
-    }
+    :root { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color: #171717; background: #f5f5f2; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #f5f5f2; min-height: 100vh; }
     .app { width: min(720px, 100%); margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 18px max(40px, env(safe-area-inset-bottom)); }
@@ -82,7 +78,18 @@
       }
     }
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTag(input.value); input.value = ""; } });
-    if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js"); }); }
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+          await registration.update();
+        } catch (error) {
+          console.warn("Service worker update failed", error);
+        }
+      });
+    }
+
     render();
   </script>
 </body>
