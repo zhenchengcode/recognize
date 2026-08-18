@@ -23,13 +23,14 @@
     .empty { color: #8a8a84; text-align: center; padding: 64px 12px; font-size: 15px; }
     .tag { background: white; border: 1px solid #deded8; border-radius: 18px; padding: 16px; margin: 12px 0; box-shadow: 0 1px 1px rgba(0,0,0,.02); }
     .tag-top { display: flex; gap: 12px; align-items: center; }
-    .check { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 14px; border: 1px solid #cfcfc8; background: #fafaf8; font-size: 24px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-    .check:active { transform: scale(.96); }
+    .actions { display: flex; gap: 7px; flex: 0 0 auto; }
+    .mark { width: 42px; height: 42px; border-radius: 13px; border: 1px solid #cfcfc8; background: #fafaf8; font-size: 22px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .mark:active { transform: scale(.96); }
     .main { flex: 1; min-width: 0; }
     .name { font-size: 18px; font-weight: 650; word-break: break-word; }
     .count { margin-top: 3px; color: #6f6f69; font-size: 14px; }
     .delete { border: 0; background: transparent; color: #a2a29c; font-size: 20px; cursor: pointer; padding: 8px; }
-    details { margin: 12px 0 0 56px; }
+    details { margin: 12px 0 0 98px; }
     summary { cursor: pointer; color: #73736d; font-size: 14px; }
     .history { margin-top: 8px; padding-left: 0; list-style: none; max-height: 220px; overflow: auto; }
     .history li { border-top: 1px solid #efefeb; padding: 8px 0; color: #555550; font-size: 14px; }
@@ -40,7 +41,7 @@
     <h1>打钩记录</h1>
     <div class="input-wrap">
       <input id="newTag" type="text" autocomplete="off" placeholder="输入文字，按回车生成标签" />
-      <div class="hint">每次点 ✓ 都会增加一次，并记录时间。</div>
+      <div class="hint">每次点 ✓ 或 ✕ 都会增加对应次数，并记录时间。</div>
     </div>
     <section id="tags"></section>
   </main>
@@ -48,48 +49,55 @@
     const STORAGE_KEY = "checktag-pwa-v1";
     const input = document.getElementById("newTag");
     const tagsEl = document.getElementById("tags");
-    let tags = load();
+    let tags = load().map(tag => {
+      if (Array.isArray(tag.events)) return tag;
+      return { ...tag, events: (tag.checks || []).map(time => ({ type: "check", time })) };
+    });
+    save();
+
     function load() { try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; } }
     function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tags)); }
     function formatTime(iso) { const d = new Date(iso); return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(d); }
-    function addTag(name) { const text = name.trim(); if (!text) return; tags.unshift({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name: text, checks: [] }); save(); render(); }
-    function checkTag(id) { const tag = tags.find(t => t.id === id); if (!tag) return; tag.checks.unshift(new Date().toISOString()); save(); render(); }
+    function addTag(name) { const text = name.trim(); if (!text) return; tags.unshift({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name: text, events: [] }); save(); render(); }
+    function markTag(id, type) { const tag = tags.find(t => t.id === id); if (!tag) return; tag.events.unshift({ type, time: new Date().toISOString() }); save(); render(); }
     function deleteTag(id) { const tag = tags.find(t => t.id === id); if (!tag) return; if (!confirm(`删除“${tag.name}”以及它的全部记录？`)) return; tags = tags.filter(t => t.id !== id); save(); render(); }
     function render() {
       tagsEl.innerHTML = "";
       if (!tags.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "还没有标签"; tagsEl.appendChild(empty); return; }
       for (const tag of tags) {
+        const events = tag.events || [];
+        const checks = events.filter(e => e.type === "check").length;
+        const crosses = events.filter(e => e.type === "cross").length;
         const card = document.createElement("article"); card.className = "tag";
         const top = document.createElement("div"); top.className = "tag-top";
-        const check = document.createElement("button"); check.className = "check"; check.type = "button"; check.textContent = "✓"; check.setAttribute("aria-label", `给 ${tag.name} 打钩`); check.addEventListener("click", () => checkTag(tag.id));
+        const actions = document.createElement("div"); actions.className = "actions";
+        const check = document.createElement("button"); check.className = "mark"; check.type = "button"; check.textContent = "✓"; check.setAttribute("aria-label", `给 ${tag.name} 打钩`); check.addEventListener("click", () => markTag(tag.id, "check"));
+        const cross = document.createElement("button"); cross.className = "mark"; cross.type = "button"; cross.textContent = "✕"; cross.setAttribute("aria-label", `给 ${tag.name} 打叉`); cross.addEventListener("click", () => markTag(tag.id, "cross"));
+        actions.append(check, cross);
         const main = document.createElement("div"); main.className = "main";
         const name = document.createElement("div"); name.className = "name"; name.textContent = tag.name;
-        const count = document.createElement("div"); count.className = "count"; const latest = tag.checks[0]; count.textContent = latest ? `已打钩 ${tag.checks.length} 次 · 最近 ${formatTime(latest)}` : "还没有打钩";
+        const count = document.createElement("div"); count.className = "count";
+        const latest = events[0];
+        count.textContent = latest ? `✓ ${checks} 次 · ✕ ${crosses} 次 · 最近 ${latest.type === "check" ? "✓" : "✕"} ${formatTime(latest.time)}` : `✓ 0 次 · ✕ 0 次`;
         main.append(name, count);
         const del = document.createElement("button"); del.className = "delete"; del.type = "button"; del.textContent = "×"; del.setAttribute("aria-label", `删除 ${tag.name}`); del.addEventListener("click", () => deleteTag(tag.id));
-        top.append(check, main, del); card.appendChild(top);
-        if (tag.checks.length) {
-          const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = `查看 ${tag.checks.length} 条记录`; details.appendChild(summary);
+        top.append(actions, main, del); card.appendChild(top);
+        if (events.length) {
+          const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = `查看 ${events.length} 条记录`; details.appendChild(summary);
           const history = document.createElement("ul"); history.className = "history";
-          tag.checks.forEach((time, i) => { const li = document.createElement("li"); li.textContent = `#${tag.checks.length - i} · ${formatTime(time)}`; history.appendChild(li); });
+          events.forEach((event, i) => { const li = document.createElement("li"); li.textContent = `#${events.length - i} · ${event.type === "check" ? "✓" : "✕"} · ${formatTime(event.time)}`; history.appendChild(li); });
           details.appendChild(history); card.appendChild(details);
         }
         tagsEl.appendChild(card);
       }
     }
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTag(input.value); input.value = ""; } });
-
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
-        try {
-          const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
-          await registration.update();
-        } catch (error) {
-          console.warn("Service worker update failed", error);
-        }
+        try { const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }); await registration.update(); }
+        catch (error) { console.warn("Service worker update failed", error); }
       });
     }
-
     render();
   </script>
 </body>
